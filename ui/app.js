@@ -202,10 +202,6 @@ columns.forEach((col, index) => {
     e.preventDefault();
   });
 
-  document.addEventListener('mousemove', (e) => {
-    // Nothing needed during drag, handled on mouseup
-  });
-
   col.addEventListener('mouseup', (e) => {
     if (!isDragging || state.solved) return;
     isDragging = false;

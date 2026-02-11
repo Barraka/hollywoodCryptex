@@ -137,9 +137,12 @@ npm start
 
 ## Version
 
-- **Prop Version**: 1.0.0
+- **Prop Version**: 1.1.0
 - **MQTT Contract**: v1.0 (same as other props)
 - **UI**: Vanilla HTML/CSS/JS (no framework)
+
+### v1.1.0 — Audit Bug Fix Pass
+- Removed 4 dead `document.addEventListener('mousemove')` listeners that were created inside a per-column `forEach` loop and never removed (memory leak)
 
 ## Key Design Decisions
 
