@@ -1,0 +1,252 @@
+/* === Reset & Base === */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a0f;
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+  cursor: default;
+}
+
+/* === Cryptex Container === */
+#cryptex {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 12px;
+  padding: 20px;
+}
+
+/* === Column === */
+.column {
+  position: relative;
+  flex: 1;
+  max-width: 220px;
+  height: 80%;
+  max-height: 460px;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  transition: box-shadow 0.3s ease;
+}
+
+.column:active {
+  cursor: grabbing;
+}
+
+/* Column Colors */
+.column[data-color="blue"] {
+  background: linear-gradient(180deg, #0d1b3e 0%, #1a3a7a 50%, #0d1b3e 100%);
+  border: 2px solid #2a5aaa;
+  box-shadow: 0 0 20px rgba(42, 90, 170, 0.3), inset 0 0 30px rgba(42, 90, 170, 0.1);
+}
+
+.column[data-color="red"] {
+  background: linear-gradient(180deg, #3e0d0d 0%, #7a1a1a 50%, #3e0d0d 100%);
+  border: 2px solid #aa2a2a;
+  box-shadow: 0 0 20px rgba(170, 42, 42, 0.3), inset 0 0 30px rgba(170, 42, 42, 0.1);
+}
+
+.column[data-color="green"] {
+  background: linear-gradient(180deg, #0d3e1b 0%, #1a7a3a 50%, #0d3e1b 100%);
+  border: 2px solid #2aaa5a;
+  box-shadow: 0 0 20px rgba(42, 170, 90, 0.3), inset 0 0 30px rgba(42, 170, 90, 0.1);
+}
+
+.column[data-color="yellow"] {
+  background: linear-gradient(180deg, #3e3a0d 0%, #7a721a 50%, #3e3a0d 100%);
+  border: 2px solid #aaaa2a;
+  box-shadow: 0 0 20px rgba(170, 170, 42, 0.3), inset 0 0 30px rgba(170, 170, 42, 0.1);
+}
+
+/* Column glow on touch */
+.column.touching[data-color="blue"] {
+  box-shadow: 0 0 40px rgba(42, 90, 170, 0.6), inset 0 0 40px rgba(42, 90, 170, 0.2);
+}
+.column.touching[data-color="red"] {
+  box-shadow: 0 0 40px rgba(170, 42, 42, 0.6), inset 0 0 40px rgba(170, 42, 42, 0.2);
+}
+.column.touching[data-color="green"] {
+  box-shadow: 0 0 40px rgba(42, 170, 90, 0.6), inset 0 0 40px rgba(42, 170, 90, 0.2);
+}
+.column.touching[data-color="yellow"] {
+  box-shadow: 0 0 40px rgba(170, 170, 42, 0.6), inset 0 0 40px rgba(170, 170, 42, 0.2);
+}
+
+/* === Number Display === */
+.number-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s cubic-bezier(0.22, 0.68, 0.35, 1.2);
+}
+
+.number {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 33.33%;
+  font-size: 8rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+
+.number.prev,
+.number.next {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 5rem;
+}
+
+/* Slide animation classes */
+.number-wrapper.slide-up {
+  transform: translateY(-33.33%);
+}
+
+.number-wrapper.slide-down {
+  transform: translateY(33.33%);
+}
+
+/* === Arrows (visual hint for swiping) === */
+.column::before,
+.column::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  opacity: 0.15;
+  z-index: 10;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.column::before {
+  top: 12px;
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
+  border-bottom: 14px solid white;
+}
+
+.column::after {
+  bottom: 12px;
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
+  border-top: 14px solid white;
+}
+
+.column:hover::before,
+.column:hover::after {
+  opacity: 0.35;
+}
+
+/* === Solved Overlay === */
+#solved-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+  z-index: 100;
+}
+
+#solved-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.solved-text {
+  font-size: 6rem;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  color: #2aaa5a;
+  text-shadow:
+    0 0 20px rgba(42, 170, 90, 0.8),
+    0 0 60px rgba(42, 170, 90, 0.4),
+    0 0 120px rgba(42, 170, 90, 0.2);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    text-shadow:
+      0 0 20px rgba(42, 170, 90, 0.8),
+      0 0 60px rgba(42, 170, 90, 0.4),
+      0 0 120px rgba(42, 170, 90, 0.2);
+  }
+  50% {
+    text-shadow:
+      0 0 30px rgba(42, 170, 90, 1),
+      0 0 80px rgba(42, 170, 90, 0.6),
+      0 0 160px rgba(42, 170, 90, 0.3);
+  }
+}
+
+/* === Column solved state === */
+.column.solved {
+  border-color: #2aaa5a !important;
+  box-shadow: 0 0 40px rgba(42, 170, 90, 0.6), inset 0 0 40px rgba(42, 170, 90, 0.2) !important;
+  transition: all 0.5s ease;
+}
+
+.column.solved .number.current {
+  color: #2aaa5a;
+  text-shadow: 0 0 30px rgba(42, 170, 90, 0.8);
+}
+
+/* === Responsive (target: 1024x600) === */
+@media (max-height: 500px) {
+  .number {
+    font-size: 5rem;
+  }
+  .number.prev,
+  .number.next {
+    font-size: 3rem;
+  }
+  .solved-text {
+    font-size: 4rem;
+  }
+}
+
+@media (max-width: 600px) {
+  #cryptex {
+    gap: 8px;
+    padding: 10px;
+  }
+  .number {
+    font-size: 5rem;
+  }
+  .number.prev,
+  .number.next {
+    font-size: 3rem;
+  }
+}

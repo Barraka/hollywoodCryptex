@@ -1,0 +1,15 @@
+In this project I want to create a prop for an Escape Room. I want to have a touchscreen with 4 "columns", each at number "0", and each a different color (that will later be set according to a hint that I have yet found, so any color will do in the meantime).
+When the plays swipes up or down, it increments or decrements the number. 
+When the 4 right numbers have been set, the prop will trigger a maglock to open a trap door.
+When the GM resets the prop (via an existing dashboard that sends MQTT commands), the display resets all columns to 0.
+
+Hardware Decision (Feb 2026):
+- Controller: Raspberry Pi (Zero 2W or 4B)
+- Display: ELECROW 7" HDMI Capacitive Touch (1024x600, IPS, 5-point)
+- Interface: Web UI (HTML/CSS/JS) in Chromium kiosk mode
+- Communication: Node.js MQTT client -> Room Controller
+- Maglock: 12V DC via MOSFET on GPIO
+- See SHOPPING_LIST.md for full parts list
+- See ui/ folder for web UI prototype
+
+Correct code: 1234 (configurable in ui/app.js)
