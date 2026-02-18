@@ -6,6 +6,8 @@ Touchscreen-based escape room prop for the **Hollywood** room at Escape Yourself
 
 ## Architecture
 
+The **Room Controller** is the backend (source of truth). The Cryptex Pi is just a display + input device + maglock actuator. It does NOT run its own backend server.
+
 ```
 ELECROW 7" HDMI Touch Display (1024×600, IPS, capacitive)
     │ HDMI (video)
@@ -13,14 +15,17 @@ ELECROW 7" HDMI Touch Display (1024×600, IPS, capacitive)
     ▼
 Raspberry Pi (Zero 2W or 4B)
     ├── Chromium (kiosk mode, fullscreen)
-    │   └── Cryptex Web UI (localhost:8080)
-    ├── Node.js
-    │   ├── HTTP server (serves UI)
-    │   ├── MQTT client (Room Controller comms)
-    │   └── GPIO control (maglock via onoff/pigpio)
-    └── WiFi → MQTT Broker → Room Controller
-                                  ↕ WebSocket
-                              GM Dashboard
+    │   └── Cryptex Web UI (file:// or simple local server)
+    ├── Lightweight MQTT client (Node.js script or in-browser)
+    │   └── Publishes status + receives commands from Room Controller
+    ├── GPIO control (maglock via onoff/pigpio)
+    └── WiFi → MQTT Broker (on Room Controller MiniPC)
+
+Room Controller (MiniPC) ← SOURCE OF TRUTH / BACKEND
+    ├── MQTT broker (Mosquitto)
+    ├── State management (props, session)
+    ├── WebSocket server → GM Dashboard
+    └── Handles force_solve / reset commands
 ```
 
 ## Project Structure
@@ -52,7 +57,7 @@ All configurable values are at the top of `ui/app.js`:
 
 ```javascript
 const CORRECT_CODE = [1, 2, 3, 4];   // The solution
-const SWIPE_THRESHOLD = 30;           // px minimum swipe distance
+const SWIPE_THRESHOLD = 15;           // px minimum swipe distance
 const ANIMATION_DURATION = 250;       // ms slide animation
 ```
 
@@ -127,19 +132,30 @@ npx serve .
 
 **On Raspberry Pi** (planned):
 ```bash
-# Install dependencies
-npm install
+# Open UI directly in Chromium kiosk mode
+chromium-browser --kiosk --noerrdialogs file:///home/pi/Cryptex/ui/index.html
 
-# Start server
-npm start
-# Opens Chromium in kiosk mode automatically
+# Or serve locally if needed (no custom backend required)
+npx serve ui -l 8080
 ```
 
 ## Version
 
-- **Prop Version**: 1.1.0
+- **Prop Version**: 1.2.0
 - **MQTT Contract**: v1.0 (same as other props)
 - **UI**: Vanilla HTML/CSS/JS (no framework)
+
+### v1.2.0 — Full-screen UI Overhaul
+- Full-screen layout: columns stretch edge-to-edge, no padding/border-radius
+- Monospace font (Courier New) for code/lock aesthetic
+- Metallic groove separators between columns
+- Edge fades (top/bottom) for depth
+- Subtle ambient breathing pulse on each column (staggered)
+- Brighter touch glow with triple-layer shadow
+- Wheel-like number animation: numbers morph in size/opacity during slide
+- Vignette overlay for cinematic feel
+- Brighter solved state (#2aff6a) with scale-in bounce
+- Swipe threshold lowered to 15px for touchscreen responsiveness
 
 ### v1.1.0 — Audit Bug Fix Pass
 - Removed 4 dead `document.addEventListener('mousemove')` listeners that were created inside a per-column `forEach` loop and never removed (memory leak)
@@ -151,3 +167,4 @@ npm start
 3. **HDMI + USB touch**: Plug-and-play, no custom display drivers
 4. **Same MQTT contract**: Integrates with existing Room Controller without changes
 5. **Vanilla JS**: No build step, runs directly in browser, matches project convention (no TypeScript)
+6. **No separate backend**: Room Controller IS the backend — the Pi only needs an MQTT client + GPIO control, not its own server

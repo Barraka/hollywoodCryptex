@@ -122,7 +122,7 @@ Hardware needed to build the Cryptex prop: a touchscreen with 4 colored number c
     │  (Zero 2W / 4B) │
     │                 │
     │  Chromium Kiosk │ ← Web UI (HTML/CSS/JS)
-    │  Node.js MQTT   │ ← Connects to Room Controller
+    │  MQTT client    │ ← Connects to Room Controller (backend)
     │  GPIO 17 ───────┼──→ MOSFET → 12V Maglock
     │                 │
     │  WiFi ──────────┼──→ MQTT Broker (Room Controller)
@@ -139,17 +139,19 @@ Hardware needed to build the Cryptex prop: a touchscreen with 4 colored number c
 
 ## Software Stack (On Pi)
 
+The Room Controller (MiniPC) is the backend. The Pi does NOT run its own server.
+
 ```
 Raspberry Pi OS Lite (headless)
 ├── Chromium (kiosk mode, fullscreen)
-│   └── Cryptex Web UI (localhost:8080)
+│   └── Cryptex Web UI (file:// or simple local serve)
 │       ├── index.html (4 colored columns)
 │       ├── style.css (swipe animations)
 │       └── app.js (touch handling, solve logic)
-├── Node.js server
-│   ├── Serves web UI on port 8080
-│   ├── MQTT client (connects to Room Controller)
-│   └── GPIO control (maglock via onoff or pigpio)
+├── Lightweight MQTT client (Node.js script)
+│   ├── Connects to Room Controller's MQTT broker
+│   └── Relays solved/reset between UI and Room Controller
+├── GPIO control (maglock via onoff or pigpio)
 └── Auto-start on boot (systemd service)
 ```
 

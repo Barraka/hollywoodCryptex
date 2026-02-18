@@ -6,7 +6,7 @@
 // Swipe up = increment, swipe down = decrement
 
 const CORRECT_CODE = [1, 2, 3, 4];
-const SWIPE_THRESHOLD = 30; // px minimum swipe distance
+const SWIPE_THRESHOLD = 15; // px minimum swipe distance
 const ANIMATION_DURATION = 250; // ms, matches CSS transition
 
 // =====================
