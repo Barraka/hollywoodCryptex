@@ -6,8 +6,8 @@
 // Swipe up = increment, swipe down = decrement
 
 const CORRECT_CODE = [1, 2, 3, 4];
-const SWIPE_THRESHOLD = 15; // px minimum swipe distance
-const ANIMATION_DURATION = 250; // ms, matches CSS transition
+const ANIMATION_DURATION = 150; // ms, matches CSS transition
+const DRAG_COMMIT_RATIO = 0.25; // fraction of cell height to commit during drag
 
 // =====================
 // State
@@ -52,7 +52,7 @@ function updateColumnDisplay(colIndex) {
 }
 
 // =====================
-// Value Change (with animation)
+// Value Change (keyboard/wheel animation)
 // =====================
 function changeValue(colIndex, direction) {
   if (state.solved || state.animating[colIndex]) return;
@@ -61,47 +61,22 @@ function changeValue(colIndex, direction) {
   const col = columns[colIndex];
   const wrapper = col.querySelector('.number-wrapper');
 
-  if (direction === 'up') {
-    // Increment: slide numbers up (show next)
-    const nextValue = (state.values[colIndex] + 1) % 10;
+  const nums = getDisplayNumbers(state.values[colIndex]);
+  const children = wrapper.querySelectorAll('.number');
+  children[0].textContent = nums.prev;
+  children[1].textContent = nums.current;
+  children[2].textContent = nums.next;
 
-    // Update display to show correct prev/next before animating
-    const nums = getDisplayNumbers(state.values[colIndex]);
-    const children = wrapper.querySelectorAll('.number');
-    children[0].textContent = nums.prev;
-    children[1].textContent = nums.current;
-    children[2].textContent = nums.next;
+  wrapper.classList.add(direction === 'up' ? 'slide-up' : 'slide-down');
 
-    // Animate
-    wrapper.classList.add('slide-up');
-
-    setTimeout(() => {
-      state.values[colIndex] = nextValue;
-      updateColumnDisplay(colIndex);
-      state.animating[colIndex] = false;
-      checkSolved();
-    }, ANIMATION_DURATION);
-
-  } else {
-    // Decrement: slide numbers down (show prev)
-    const prevValue = (state.values[colIndex] - 1 + 10) % 10;
-
-    const nums = getDisplayNumbers(state.values[colIndex]);
-    const children = wrapper.querySelectorAll('.number');
-    children[0].textContent = nums.prev;
-    children[1].textContent = nums.current;
-    children[2].textContent = nums.next;
-
-    // Animate
-    wrapper.classList.add('slide-down');
-
-    setTimeout(() => {
-      state.values[colIndex] = prevValue;
-      updateColumnDisplay(colIndex);
-      state.animating[colIndex] = false;
-      checkSolved();
-    }, ANIMATION_DURATION);
-  }
+  setTimeout(() => {
+    state.values[colIndex] = direction === 'up'
+      ? (state.values[colIndex] + 1) % 10
+      : (state.values[colIndex] - 1 + 10) % 10;
+    updateColumnDisplay(colIndex);
+    state.animating[colIndex] = false;
+    checkSolved();
+  }, ANIMATION_DURATION);
 }
 
 // =====================
@@ -155,91 +130,109 @@ function resetCryptex() {
 window.resetCryptex = resetCryptex;
 
 // =====================
-// Touch Handling
+// Drag Handling (touch + mouse)
 // =====================
 columns.forEach((col, index) => {
-  let startY = 0;
   let isDragging = false;
+  let lastY = 0;
+
+  function onDragStart(y) {
+    if (state.solved) return;
+    lastY = y;
+    isDragging = true;
+    col.classList.add('touching');
+
+    // Disable CSS transition so wrapper follows finger instantly
+    const wrapper = col.querySelector('.number-wrapper');
+    wrapper.classList.remove('slide-up', 'slide-down');
+    wrapper.style.transition = 'none';
+    wrapper.style.transform = 'translateY(0)';
+  }
+
+  function onDragMove(y) {
+    if (!isDragging || state.solved) return;
+
+    const delta = lastY - y; // positive = dragging up
+    const wrapper = col.querySelector('.number-wrapper');
+    const colHeight = col.offsetHeight;
+    const cellHeight = colHeight / 3;
+    const commitThreshold = cellHeight * DRAG_COMMIT_RATIO;
+
+    if (Math.abs(delta) >= commitThreshold) {
+      // Commit number change
+      if (delta > 0) {
+        state.values[index] = (state.values[index] + 1) % 10;
+      } else {
+        state.values[index] = (state.values[index] - 1 + 10) % 10;
+      }
+
+      // Update display and snap wrapper back to center
+      const nums = getDisplayNumbers(state.values[index]);
+      const children = wrapper.querySelectorAll('.number');
+      children[0].textContent = nums.prev;
+      children[1].textContent = nums.current;
+      children[2].textContent = nums.next;
+
+      wrapper.style.transform = 'translateY(0)';
+      lastY = y;
+      checkSolved();
+    } else {
+      // Live drag: wrapper follows finger
+      const pct = -(delta / colHeight) * 100;
+      wrapper.style.transform = `translateY(${pct}%)`;
+    }
+  }
+
+  function onDragEnd() {
+    if (!isDragging) return;
+    isDragging = false;
+    col.classList.remove('touching');
+
+    // Snap back to center with short animation
+    const wrapper = col.querySelector('.number-wrapper');
+    wrapper.style.transition = `transform ${ANIMATION_DURATION}ms cubic-bezier(0.22, 0.68, 0.35, 1.2)`;
+    wrapper.style.transform = 'translateY(0)';
+    setTimeout(() => {
+      wrapper.style.transition = '';
+      wrapper.style.transform = '';
+    }, ANIMATION_DURATION);
+  }
 
   // --- Touch Events ---
   col.addEventListener('touchstart', (e) => {
-    if (state.solved) return;
-    startY = e.touches[0].clientY;
-    isDragging = true;
-    col.classList.add('touching');
+    onDragStart(e.touches[0].clientY);
   }, { passive: true });
 
   col.addEventListener('touchmove', (e) => {
-    // Prevent page scroll
     e.preventDefault();
+    onDragMove(e.touches[0].clientY);
   }, { passive: false });
 
-  col.addEventListener('touchend', (e) => {
-    if (!isDragging || state.solved) return;
-    isDragging = false;
-    col.classList.remove('touching');
-
-    const endY = e.changedTouches[0].clientY;
-    const deltaY = startY - endY;
-
-    if (Math.abs(deltaY) >= SWIPE_THRESHOLD) {
-      if (deltaY > 0) {
-        // Swiped up → increment
-        changeValue(index, 'up');
-      } else {
-        // Swiped down → decrement
-        changeValue(index, 'down');
-      }
-    }
-  }, { passive: true });
+  col.addEventListener('touchend', () => onDragEnd(), { passive: true });
 
   // --- Mouse Events (for desktop testing) ---
   col.addEventListener('mousedown', (e) => {
-    if (state.solved) return;
-    startY = e.clientY;
-    isDragging = true;
-    col.classList.add('touching');
+    onDragStart(e.clientY);
     e.preventDefault();
   });
 
-  col.addEventListener('mouseup', (e) => {
-    if (!isDragging || state.solved) return;
-    isDragging = false;
-    col.classList.remove('touching');
-
-    const deltaY = startY - e.clientY;
-    if (Math.abs(deltaY) >= SWIPE_THRESHOLD) {
-      if (deltaY > 0) {
-        changeValue(index, 'up');
-      } else {
-        changeValue(index, 'down');
-      }
-    }
-  });
-
+  col.addEventListener('mousemove', (e) => onDragMove(e.clientY));
+  col.addEventListener('mouseup', () => onDragEnd());
   col.addEventListener('mouseleave', () => {
-    if (isDragging) {
-      isDragging = false;
-      col.classList.remove('touching');
-    }
+    if (isDragging) onDragEnd();
   });
 
-  // --- Scroll Wheel (bonus: for desktop testing) ---
+  // --- Scroll Wheel ---
   col.addEventListener('wheel', (e) => {
     if (state.solved) return;
     e.preventDefault();
-    if (e.deltaY < 0) {
-      changeValue(index, 'up');
-    } else {
-      changeValue(index, 'down');
-    }
+    changeValue(index, e.deltaY < 0 ? 'up' : 'down');
   }, { passive: false });
 });
 
 // =====================
 // Keyboard (for desktop testing)
 // =====================
-// Keys 1-4 select column, Up/Down change value
 let selectedColumn = 0;
 
 document.addEventListener('keydown', (e) => {
