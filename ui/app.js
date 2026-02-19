@@ -6,8 +6,8 @@
 // Swipe up = increment, swipe down = decrement
 
 const CORRECT_CODE = [1, 2, 3, 4];
-const ANIMATION_DURATION = 150; // ms, matches CSS transition
-const DRAG_COMMIT_RATIO = 0.25; // fraction of cell height to commit during drag
+const SWIPE_THRESHOLD = 15; // px minimum swipe distance
+const ANIMATION_DURATION = 200; // ms, matches CSS transition
 
 // =====================
 // State
@@ -52,7 +52,7 @@ function updateColumnDisplay(colIndex) {
 }
 
 // =====================
-// Value Change (keyboard/wheel animation)
+// Value Change (with rotation animation)
 // =====================
 function changeValue(colIndex, direction) {
   if (state.solved || state.animating[colIndex]) return;
@@ -61,22 +61,42 @@ function changeValue(colIndex, direction) {
   const col = columns[colIndex];
   const wrapper = col.querySelector('.number-wrapper');
 
-  const nums = getDisplayNumbers(state.values[colIndex]);
-  const children = wrapper.querySelectorAll('.number');
-  children[0].textContent = nums.prev;
-  children[1].textContent = nums.current;
-  children[2].textContent = nums.next;
+  if (direction === 'up') {
+    const nextValue = (state.values[colIndex] + 1) % 10;
 
-  wrapper.classList.add(direction === 'up' ? 'slide-up' : 'slide-down');
+    const nums = getDisplayNumbers(state.values[colIndex]);
+    const children = wrapper.querySelectorAll('.number');
+    children[0].textContent = nums.prev;
+    children[1].textContent = nums.current;
+    children[2].textContent = nums.next;
 
-  setTimeout(() => {
-    state.values[colIndex] = direction === 'up'
-      ? (state.values[colIndex] + 1) % 10
-      : (state.values[colIndex] - 1 + 10) % 10;
-    updateColumnDisplay(colIndex);
-    state.animating[colIndex] = false;
-    checkSolved();
-  }, ANIMATION_DURATION);
+    wrapper.classList.add('slide-up');
+
+    setTimeout(() => {
+      state.values[colIndex] = nextValue;
+      updateColumnDisplay(colIndex);
+      state.animating[colIndex] = false;
+      checkSolved();
+    }, ANIMATION_DURATION);
+
+  } else {
+    const prevValue = (state.values[colIndex] - 1 + 10) % 10;
+
+    const nums = getDisplayNumbers(state.values[colIndex]);
+    const children = wrapper.querySelectorAll('.number');
+    children[0].textContent = nums.prev;
+    children[1].textContent = nums.current;
+    children[2].textContent = nums.next;
+
+    wrapper.classList.add('slide-down');
+
+    setTimeout(() => {
+      state.values[colIndex] = prevValue;
+      updateColumnDisplay(colIndex);
+      state.animating[colIndex] = false;
+      checkSolved();
+    }, ANIMATION_DURATION);
+  }
 }
 
 // =====================
@@ -130,103 +150,88 @@ function resetCryptex() {
 window.resetCryptex = resetCryptex;
 
 // =====================
-// Drag Handling (touch + mouse)
+// Touch / Mouse Handling
 // =====================
 columns.forEach((col, index) => {
+  let startY = 0;
   let isDragging = false;
-  let lastY = 0;
-
-  function onDragStart(y) {
-    if (state.solved) return;
-    lastY = y;
-    isDragging = true;
-    col.classList.add('touching');
-
-    // Disable CSS transition so wrapper follows finger instantly
-    const wrapper = col.querySelector('.number-wrapper');
-    wrapper.classList.remove('slide-up', 'slide-down');
-    wrapper.style.transition = 'none';
-    wrapper.style.transform = 'translateY(0)';
-  }
-
-  function onDragMove(y) {
-    if (!isDragging || state.solved) return;
-
-    const delta = lastY - y; // positive = dragging up
-    const wrapper = col.querySelector('.number-wrapper');
-    const colHeight = col.offsetHeight;
-    const cellHeight = colHeight / 3;
-    const commitThreshold = cellHeight * DRAG_COMMIT_RATIO;
-
-    if (Math.abs(delta) >= commitThreshold) {
-      // Commit number change
-      if (delta > 0) {
-        state.values[index] = (state.values[index] + 1) % 10;
-      } else {
-        state.values[index] = (state.values[index] - 1 + 10) % 10;
-      }
-
-      // Update display and snap wrapper back to center
-      const nums = getDisplayNumbers(state.values[index]);
-      const children = wrapper.querySelectorAll('.number');
-      children[0].textContent = nums.prev;
-      children[1].textContent = nums.current;
-      children[2].textContent = nums.next;
-
-      wrapper.style.transform = 'translateY(0)';
-      lastY = y;
-      checkSolved();
-    } else {
-      // Live drag: wrapper follows finger
-      const pct = -(delta / colHeight) * 100;
-      wrapper.style.transform = `translateY(${pct}%)`;
-    }
-  }
-
-  function onDragEnd() {
-    if (!isDragging) return;
-    isDragging = false;
-    col.classList.remove('touching');
-
-    // Snap back to center with short animation
-    const wrapper = col.querySelector('.number-wrapper');
-    wrapper.style.transition = `transform ${ANIMATION_DURATION}ms cubic-bezier(0.22, 0.68, 0.35, 1.2)`;
-    wrapper.style.transform = 'translateY(0)';
-    setTimeout(() => {
-      wrapper.style.transition = '';
-      wrapper.style.transform = '';
-    }, ANIMATION_DURATION);
-  }
 
   // --- Touch Events ---
   col.addEventListener('touchstart', (e) => {
-    onDragStart(e.touches[0].clientY);
+    if (state.solved) return;
+    startY = e.touches[0].clientY;
+    isDragging = true;
+    col.classList.add('touching');
   }, { passive: true });
 
   col.addEventListener('touchmove', (e) => {
     e.preventDefault();
-    onDragMove(e.touches[0].clientY);
+    if (!isDragging || state.solved) return;
+
+    const currentY = e.touches[0].clientY;
+    const deltaY = startY - currentY;
+
+    // Trigger as soon as threshold is crossed (don't wait for finger lift)
+    if (Math.abs(deltaY) >= SWIPE_THRESHOLD && !state.animating[index]) {
+      startY = currentY; // reset anchor so continued drag triggers next change
+      if (deltaY > 0) {
+        changeValue(index, 'up');
+      } else {
+        changeValue(index, 'down');
+      }
+    }
   }, { passive: false });
 
-  col.addEventListener('touchend', () => onDragEnd(), { passive: true });
+  col.addEventListener('touchend', () => {
+    isDragging = false;
+    col.classList.remove('touching');
+  }, { passive: true });
 
   // --- Mouse Events (for desktop testing) ---
   col.addEventListener('mousedown', (e) => {
-    onDragStart(e.clientY);
+    if (state.solved) return;
+    startY = e.clientY;
+    isDragging = true;
+    col.classList.add('touching');
     e.preventDefault();
   });
 
-  col.addEventListener('mousemove', (e) => onDragMove(e.clientY));
-  col.addEventListener('mouseup', () => onDragEnd());
+  col.addEventListener('mousemove', (e) => {
+    if (!isDragging || state.solved) return;
+
+    const deltaY = startY - e.clientY;
+
+    if (Math.abs(deltaY) >= SWIPE_THRESHOLD && !state.animating[index]) {
+      startY = e.clientY;
+      if (deltaY > 0) {
+        changeValue(index, 'up');
+      } else {
+        changeValue(index, 'down');
+      }
+    }
+  });
+
+  col.addEventListener('mouseup', () => {
+    isDragging = false;
+    col.classList.remove('touching');
+  });
+
   col.addEventListener('mouseleave', () => {
-    if (isDragging) onDragEnd();
+    if (isDragging) {
+      isDragging = false;
+      col.classList.remove('touching');
+    }
   });
 
   // --- Scroll Wheel ---
   col.addEventListener('wheel', (e) => {
     if (state.solved) return;
     e.preventDefault();
-    changeValue(index, e.deltaY < 0 ? 'up' : 'down');
+    if (e.deltaY < 0) {
+      changeValue(index, 'up');
+    } else {
+      changeValue(index, 'down');
+    }
   }, { passive: false });
 });
 
