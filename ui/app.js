@@ -16,6 +16,7 @@ const state = {
   values: [0, 0, 0, 0],
   solved: false,
   animating: [false, false, false, false],
+  animTimers: [null, null, null, null],
 };
 
 // =====================
@@ -55,48 +56,39 @@ function updateColumnDisplay(colIndex) {
 // Value Change (with rotation animation)
 // =====================
 function changeValue(colIndex, direction) {
-  if (state.solved || state.animating[colIndex]) return;
+  if (state.solved) return;
+
+  // If already animating, interrupt: cancel timer and snap to current state
+  if (state.animating[colIndex]) {
+    clearTimeout(state.animTimers[colIndex]);
+    updateColumnDisplay(colIndex);
+  }
 
   state.animating[colIndex] = true;
   const col = columns[colIndex];
   const wrapper = col.querySelector('.number-wrapper');
 
-  if (direction === 'up') {
-    const nextValue = (state.values[colIndex] + 1) % 10;
+  // Show current values before animating
+  const nums = getDisplayNumbers(state.values[colIndex]);
+  const children = wrapper.querySelectorAll('.number');
+  children[0].textContent = nums.prev;
+  children[1].textContent = nums.current;
+  children[2].textContent = nums.next;
 
-    const nums = getDisplayNumbers(state.values[colIndex]);
-    const children = wrapper.querySelectorAll('.number');
-    children[0].textContent = nums.prev;
-    children[1].textContent = nums.current;
-    children[2].textContent = nums.next;
+  // Start rotation animation
+  wrapper.classList.add(direction === 'up' ? 'slide-up' : 'slide-down');
 
-    wrapper.classList.add('slide-up');
+  // Update state immediately (don't wait for animation)
+  state.values[colIndex] = direction === 'up'
+    ? (state.values[colIndex] + 1) % 10
+    : (state.values[colIndex] - 1 + 10) % 10;
+  checkSolved();
 
-    setTimeout(() => {
-      state.values[colIndex] = nextValue;
-      updateColumnDisplay(colIndex);
-      state.animating[colIndex] = false;
-      checkSolved();
-    }, ANIMATION_DURATION);
-
-  } else {
-    const prevValue = (state.values[colIndex] - 1 + 10) % 10;
-
-    const nums = getDisplayNumbers(state.values[colIndex]);
-    const children = wrapper.querySelectorAll('.number');
-    children[0].textContent = nums.prev;
-    children[1].textContent = nums.current;
-    children[2].textContent = nums.next;
-
-    wrapper.classList.add('slide-down');
-
-    setTimeout(() => {
-      state.values[colIndex] = prevValue;
-      updateColumnDisplay(colIndex);
-      state.animating[colIndex] = false;
-      checkSolved();
-    }, ANIMATION_DURATION);
-  }
+  // After animation, update display to match new state
+  state.animTimers[colIndex] = setTimeout(() => {
+    updateColumnDisplay(colIndex);
+    state.animating[colIndex] = false;
+  }, ANIMATION_DURATION);
 }
 
 // =====================
@@ -184,7 +176,7 @@ columns.forEach((col, index) => {
     const deltaY = startY - currentY;
 
     // Trigger as soon as threshold is crossed (don't wait for finger lift)
-    if (Math.abs(deltaY) >= SWIPE_THRESHOLD && !state.animating[index]) {
+    if (Math.abs(deltaY) >= SWIPE_THRESHOLD) {
       startY = currentY; // reset anchor so continued drag triggers next change
       if (deltaY > 0) {
         changeValue(index, 'up');
@@ -213,7 +205,7 @@ columns.forEach((col, index) => {
 
     const deltaY = startY - e.clientY;
 
-    if (Math.abs(deltaY) >= SWIPE_THRESHOLD && !state.animating[index]) {
+    if (Math.abs(deltaY) >= SWIPE_THRESHOLD) {
       startY = e.clientY;
       if (deltaY > 0) {
         changeValue(index, 'up');
