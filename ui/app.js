@@ -125,8 +125,20 @@ function onSolved() {
     solvedOverlay.classList.add('visible');
   }, columns.length * 200 + 400);
 
-  // TODO: Send MQTT solved event
+  // Notify controller (maglock + MQTT)
+  sendToController({ type: 'solved' });
   console.log('[Cryptex] SOLVED! Code:', state.values.join(''));
+}
+
+// =====================
+// Force Solve (triggered by GM via controller)
+// =====================
+function forceSolve() {
+  if (state.solved) return;
+  state.values = [...CORRECT_CODE];
+  columns.forEach((_, i) => updateColumnDisplay(i));
+  state.solved = true;
+  onSolved();
 }
 
 // =====================
@@ -257,8 +269,65 @@ document.addEventListener('keydown', (e) => {
 });
 
 // =====================
+// Controller WebSocket
+// =====================
+const WS_URL = 'ws://localhost:9000';
+let ws = null;
+let wsReconnectTimer = null;
+
+function connectController() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    console.log('[WS] Connected to controller');
+    if (wsReconnectTimer) {
+      clearInterval(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
+  };
+
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+
+    switch (msg.type) {
+      case 'reset':
+        resetCryptex();
+        break;
+      case 'force_solve':
+        forceSolve();
+        break;
+      case 'state':
+        // Sync state on reconnect
+        if (msg.solved && !state.solved) forceSolve();
+        if (!msg.solved && state.solved) resetCryptex();
+        break;
+    }
+  };
+
+  ws.onclose = () => {
+    console.log('[WS] Disconnected from controller');
+    ws = null;
+    if (!wsReconnectTimer) {
+      wsReconnectTimer = setInterval(connectController, 3000);
+    }
+  };
+
+  ws.onerror = () => {
+    // onclose will fire after this
+  };
+}
+
+function sendToController(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  }
+}
+
+// =====================
 // Init
 // =====================
 columns.forEach((_, i) => updateColumnDisplay(i));
+connectController();
 console.log('[Cryptex] Ready. Code:', CORRECT_CODE.join(''));
 console.log('[Cryptex] Controls: Swipe/drag up/down on columns, scroll wheel, or keys 1-4 + Arrow Up/Down. R to reset.');

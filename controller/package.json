@@ -1,0 +1,14 @@
+{
+  "name": "cryptex-controller",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cryptex prop controller — GPIO maglock + MQTT bridge",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.0",
+    "ws": "^8.18.0"
+  }
+}
