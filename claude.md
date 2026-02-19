@@ -19,11 +19,11 @@ Raspberry Pi 4B (192.168.1.207, user: escape)
     │       └── Connects to controller via ws://localhost:9000
     ├── controller/index.js (Node.js)
     │   ├── Local WebSocket server (port 9000) ↔ browser UI
-    │   ├── MQTT client → Room Controller broker (192.168.1.99:1883)
+    │   ├── MQTT client → Room Controller broker (192.168.1.10:1883)
     │   └── GPIO 17 → gpioset → MOSFET → 12V maglock
     └── WiFi → MQTT Broker (on Room Controller MiniPC)
 
-Room Controller (MiniPC, 192.168.1.99) ← SOURCE OF TRUTH / BACKEND
+Room Controller (MiniPC, 192.168.1.10) ← SOURCE OF TRUTH / BACKEND
     ├── MQTT broker (Mosquitto, port 1883)
     ├── State management (props, session)
     ├── WebSocket server → GM Dashboard
@@ -78,7 +78,7 @@ const CONFIG = {
   propName: 'Cryptex',
   site: 'ey1',
   room: 'hollywood',
-  mqttBroker: 'mqtt://192.168.1.99:1883',
+  mqttBroker: 'mqtt://192.168.1.10:1883',
   gpioChip: 'gpiochip0',
   gpioLine: 17,           // Physical pin 11
   wsPort: 9000,

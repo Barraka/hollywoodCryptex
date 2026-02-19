@@ -19,7 +19,7 @@ const CONFIG = {
   propName: 'Cryptex',
   site: 'ey1',
   room: 'hollywood',
-  mqttBroker: process.env.MQTT_BROKER || 'mqtt://192.168.1.99:1883',
+  mqttBroker: process.env.MQTT_BROKER || 'mqtt://192.168.1.10:1883',
   gpioChip: 'gpiochip0',
   gpioLine: 17,
   wsPort: 9000,
