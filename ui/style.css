@@ -191,7 +191,7 @@ html, body {
 
 .number.prev,
 .number.next {
-  color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.3);
   font-size: 4.5rem;
   text-shadow: none;
 }
@@ -218,7 +218,7 @@ html, body {
 /* Sliding UP: current shrinks (going to prev), next grows (becoming current) */
 .number-wrapper.slide-up .number.current {
   font-size: 4.5rem;
-  color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.3);
   text-shadow: none;
 }
 .number-wrapper.slide-up .number.next {
@@ -236,7 +236,7 @@ html, body {
 /* Sliding DOWN: current shrinks (going to next), prev grows (becoming current) */
 .number-wrapper.slide-down .number.current {
   font-size: 4.5rem;
-  color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.3);
   text-shadow: none;
 }
 .number-wrapper.slide-down .number.prev {
