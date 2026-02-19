@@ -2,27 +2,29 @@
 
 ## Overview
 
-Touchscreen-based escape room prop for the **Hollywood** room at Escape Yourself. Players swipe 4 colored number columns to find the correct combination. When solved, a maglock opens a trap door.
+Touchscreen-based escape room prop for the **Hollywood** room at Escape Yourself. Players swipe 4 colored number columns to find the correct combination. When solved, a maglock releases a trap door.
 
 ## Architecture
 
-The **Room Controller** is the backend (source of truth). The Cryptex Pi is just a display + input device + maglock actuator. It does NOT run its own backend server.
+The **Room Controller** is the backend (source of truth). The Cryptex Pi is a display + input device + maglock actuator.
 
 ```
 ELECROW 7" HDMI Touch Display (1024×600, IPS, capacitive)
     │ HDMI (video)
     │ USB (touch input)
     ▼
-Raspberry Pi (Zero 2W or 4B)
+Raspberry Pi 4B (192.168.1.207, user: escape)
     ├── Chromium (kiosk mode, fullscreen)
-    │   └── Cryptex Web UI (file:// or simple local server)
-    ├── Lightweight MQTT client (Node.js script or in-browser)
-    │   └── Publishes status + receives commands from Room Controller
-    ├── GPIO control (maglock via onoff/pigpio)
+    │   └── Cryptex Web UI (served on localhost:8080)
+    │       └── Connects to controller via ws://localhost:9000
+    ├── controller/index.js (Node.js)
+    │   ├── Local WebSocket server (port 9000) ↔ browser UI
+    │   ├── MQTT client → Room Controller broker (192.168.1.99:1883)
+    │   └── GPIO 17 → gpioset → MOSFET → 12V maglock
     └── WiFi → MQTT Broker (on Room Controller MiniPC)
 
-Room Controller (MiniPC) ← SOURCE OF TRUTH / BACKEND
-    ├── MQTT broker (Mosquitto)
+Room Controller (MiniPC, 192.168.1.99) ← SOURCE OF TRUTH / BACKEND
+    ├── MQTT broker (Mosquitto, port 1883)
     ├── State management (props, session)
     ├── WebSocket server → GM Dashboard
     └── Handles force_solve / reset commands
@@ -35,10 +37,17 @@ Cryptex/
 ├── claude.md              # This file
 ├── Explanations.txt       # Original prop concept
 ├── SHOPPING_LIST.md       # Hardware parts list & costs
+├── ecosystem.config.cjs   # pm2 process config
+├── start.sh               # Manual startup script (legacy)
+├── start-kiosk.sh         # Chromium kiosk launcher
+├── controller/            # Node.js controller (runs on Pi)
+│   ├── package.json       # Dependencies: mqtt, ws
+│   └── index.js           # MQTT bridge + GPIO + local WS server
 └── ui/                    # Web UI (runs in Chromium on Pi)
+    ├── package.json       # Dependencies: serve
     ├── index.html         # Main page (4 colored columns)
     ├── style.css          # Dark theme, column colors, animations
-    └── app.js             # Touch/swipe logic, solve detection
+    └── app.js             # Touch/swipe logic, solve detection, WS client
 ```
 
 ## Gameplay
@@ -58,7 +67,22 @@ All configurable values are at the top of `ui/app.js`:
 ```javascript
 const CORRECT_CODE = [1, 2, 3, 4];   // The solution
 const SWIPE_THRESHOLD = 15;           // px minimum swipe distance
-const ANIMATION_DURATION = 250;       // ms slide animation
+const ANIMATION_DURATION = 200;       // ms slide animation
+```
+
+Controller config at the top of `controller/index.js`:
+
+```javascript
+const CONFIG = {
+  propId: 'hollywood_cryptex',
+  propName: 'Cryptex',
+  site: 'ey1',
+  room: 'hollywood',
+  mqttBroker: 'mqtt://192.168.1.99:1883',
+  gpioChip: 'gpiochip0',
+  gpioLine: 17,           // Physical pin 11
+  wsPort: 9000,
+};
 ```
 
 Column colors are set via `data-color` attributes in `index.html`:
@@ -66,8 +90,6 @@ Column colors are set via `data-color` attributes in `index.html`:
 - Column 2: `red`
 - Column 3: `green`
 - Column 4: `yellow`
-
-Colors can be changed by editing the `data-color` attribute and corresponding CSS in `style.css`.
 
 ## Controls (Desktop Testing)
 
@@ -79,45 +101,81 @@ Colors can be changed by editing the `data-color` attribute and corresponding CS
 | R key | Reset all columns to 0 |
 | `window.resetCryptex()` | Reset from browser console |
 
-## MQTT Integration (Planned)
+## MQTT Integration
 
-Will follow the existing MQTT Contract v1.0:
+Follows the MQTT Contract v1.0.
 
-**Topic**: `ey/<site>/<room>/prop/hollywood_cryptex/{status|event|cmd}`
+**Topics**: `ey/ey1/hollywood/prop/hollywood_cryptex/{status|event|cmd}`
 
-**Status message** (published on state change):
+**Status message** (published on state change, retained):
 ```json
 {
   "type": "status",
-  "solved": true,
-  "online": true,
-  "override": false,
+  "propId": "hollywood_cryptex",
   "name": "Cryptex",
-  "details": {
-    "sensors": [
-      {"sensorId": "col0", "triggered": true},
-      {"sensorId": "col1", "triggered": true},
-      {"sensorId": "col2", "triggered": true},
-      {"sensorId": "col3", "triggered": true}
-    ]
-  }
+  "online": true,
+  "solved": true,
+  "override": false,
+  "timestamp": 1739980000000,
+  "lastChangeSource": "player"
 }
 ```
 
 **Commands** (received from Room Controller):
-- `force_solve` → Set correct code + trigger solve animation + open maglock
+- `force_solved` → Set correct code + trigger solve animation + open maglock
 - `reset` → Reset all columns to 0 + lock maglock
+
+**LWT**: Publishes offline status (retained) on unexpected disconnect.
 
 ## Hardware
 
 See `SHOPPING_LIST.md` for full parts list.
 
 **Summary**:
-- **Controller**: Raspberry Pi Zero 2W (~€18) or Pi 4B (~€45)
-- **Display**: ELECROW 7" HDMI Capacitive Touch (~€60)
-- **Actuator**: 12V DC maglock via MOSFET on GPIO
+- **Controller**: Raspberry Pi 4B
+- **Display**: ELECROW 7" HDMI Capacitive Touch (1024×600)
+- **Actuator**: 12V DC maglock via MOSFET on GPIO 17 (physical pin 11)
 - **Power**: 12V PSU + 5V buck converter
-- **Total cost**: ~€125-149
+
+**Wiring**:
+```
+Pi GPIO 17 (pin 11) → MOSFET SIG (gate)
+Pi 3.3V (pin 1)     → MOSFET VCC
+Pi GND (pin 6)      → MOSFET GND ← 12V PSU (-)   [shared ground]
+12V PSU (+)          → MOSFET V+/V- → Maglock
+Flyback diode (1N4007) across maglock terminals (band toward +)
+```
+
+## Deployment (Raspberry Pi)
+
+**OS**: Debian 13 (Trixie), Node.js v20
+
+**Services managed by pm2** (auto-start on boot):
+- `cryptex-controller` — MQTT + GPIO + local WS (port 9000)
+- `cryptex-serve` — Static file server for UI (port 8080)
+
+**Chromium kiosk** auto-starts via `~/.config/autostart/cryptex-kiosk.desktop`
+
+**Useful commands** (via SSH):
+```bash
+# View process status
+pm2 list
+
+# View controller logs
+pm2 logs cryptex-controller
+
+# Restart everything
+pm2 restart all
+pkill chromium; DISPLAY=:0 chromium --kiosk --noerrdialogs --disable-infobars --no-first-run http://localhost:8080 &
+
+# Full reboot (everything auto-starts)
+sudo reboot
+```
+
+**SSH access**:
+```bash
+ssh escape@192.168.1.207   # Passwordless (ed25519 key)
+```
 
 ## Development
 
@@ -126,24 +184,31 @@ See `SHOPPING_LIST.md` for full parts list.
 # Just open ui/index.html in your browser
 # Or use a local server:
 cd ui
-npx serve .
-# Open http://localhost:3000
-```
-
-**On Raspberry Pi** (planned):
-```bash
-# Open UI directly in Chromium kiosk mode
-chromium-browser --kiosk --noerrdialogs file:///home/pi/Cryptex/ui/index.html
-
-# Or serve locally if needed (no custom backend required)
-npx serve ui -l 8080
+npx serve . -l 8080
+# Open http://localhost:8080
+# WS connection to controller will fail silently — UI still works standalone
 ```
 
 ## Version
 
-- **Prop Version**: 1.2.0
+- **Prop Version**: 1.3.0
 - **MQTT Contract**: v1.0 (same as other props)
 - **UI**: Vanilla HTML/CSS/JS (no framework)
+
+### v1.3.0 — Controller + GPIO + MQTT Integration
+- Added `controller/index.js`: bridges browser UI, MQTT, and GPIO
+- GPIO via system `gpioset` (gpiod v2) — no native npm dependencies
+- Browser UI connects to controller via local WebSocket (port 9000)
+- Handles player solve → maglock release → MQTT status publish
+- Handles GM force_solve and reset via MQTT commands
+- pm2 process management with auto-start on boot
+- Chromium kiosk auto-starts via desktop autostart entry
+
+### v1.2.1 — UX Improvements
+- Increased prev/next number opacity (0.12 → 0.3) for better visibility
+- Swipe triggers on touchmove (mid-drag) instead of touchend
+- Continuous scrolling: keep dragging for multiple number changes
+- Animation duration tuned to 200ms
 
 ### v1.2.0 — Full-screen UI Overhaul
 - Full-screen layout: columns stretch edge-to-edge, no padding/border-radius
@@ -163,8 +228,10 @@ npx serve ui -l 8080
 ## Key Design Decisions
 
 1. **Web UI instead of native**: Easier to develop and iterate (HTML/CSS/JS vs C++/LVGL)
-2. **Raspberry Pi instead of ESP32**: Enables web-based UI via Chromium + HDMI display
+2. **Raspberry Pi 4B**: Enables web-based UI via Chromium + HDMI display, plenty of GPIO
 3. **HDMI + USB touch**: Plug-and-play, no custom display drivers
 4. **Same MQTT contract**: Integrates with existing Room Controller without changes
 5. **Vanilla JS**: No build step, runs directly in browser, matches project convention (no TypeScript)
-6. **No separate backend**: Room Controller IS the backend — the Pi only needs an MQTT client + GPIO control, not its own server
+6. **GPIO via gpioset**: Uses system gpiod tools, avoids native npm compilation issues on Debian Trixie
+7. **Local WebSocket bridge**: Browser UI ↔ controller communication without requiring MQTT WebSocket support on the broker
+8. **pm2 for process management**: Auto-restart on crash, auto-start on boot, log management
